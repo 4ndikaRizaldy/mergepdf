@@ -5,7 +5,6 @@ import io
 import zipfile
 from PIL import Image
 import os
-from datetime import datetime
 
 # ===== KONFIGURASI HALAMAN =====
 st.set_page_config(
@@ -14,12 +13,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# Buat folder output dan default jika belum ada
-OUTPUT_DIR = "Output_Rapor"
+# Folder untuk default files (tetap dibuat untuk menyimpan template default)
 DEFAULT_IMAGES_DIR = "default_images"
 DEFAULT_FILES_DIR = "default_files"
 
-for folder_name in [OUTPUT_DIR, DEFAULT_IMAGES_DIR, DEFAULT_FILES_DIR]:
+for folder_name in [DEFAULT_IMAGES_DIR, DEFAULT_FILES_DIR]:
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
 
@@ -29,7 +27,7 @@ st.markdown("<h4 style='text-align:center;'>Aplikasi Pengolah PDF Rapor Terpadu<
 st.divider()
 
 # ===== TAB MENU =====
-tab1, tab2, tab3 = st.tabs(["➕ Gabung PDF", "✂️ Pisah PDF", "🖼️ Tambah Logo, TTD & Stempel"])
+tab1, tab2, tab3 = st.tabs(["➕ Gabung PDF", "️ Pisah PDF", "🖼️ Tambah Logo, TTD & Stempel"])
 
 # ==============================================================================
 # TAB 1: GABUNG PDF (MERGE)
@@ -41,7 +39,7 @@ with tab1:
     if uploaded_files_merge:
         st.info(f"✅ {len(uploaded_files_merge)} file siap digabung")
 
-        if st.button(" Gabungkan PDF", type="primary", use_container_width=True):
+        if st.button("🔄 Gabungkan PDF", type="primary", use_container_width=True):
             with st.spinner("Sedang menggabungkan file..."):
                 writer = PdfWriter()
                 for pdf_file in uploaded_files_merge:
@@ -51,14 +49,19 @@ with tab1:
 
                 buffer = io.BytesIO()
                 writer.write(buffer)
+                buffer.seek(0) # PENTING: Kembalikan kursor ke awal agar bisa didownload
                 
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                file_path = os.path.join(OUTPUT_DIR, f"Rapor_Gabungan_{timestamp}.pdf")
-                
-                with open(file_path, "wb") as f:
-                    f.write(buffer.getvalue())
-                
-            st.success(f"✅ PDF berhasil digabung dan disimpan di: `{file_path}`")
+            st.success("✅ PDF berhasil digabung!")
+            
+            # KEMBALI KE DOWNLOAD BUTTON AGAR BISA DIAKSES DI WEB
+            st.download_button(
+                label="⬇️ Download Rapor Gabungan",
+                data=buffer,
+                file_name="Rapor_Kelas_Lengkap.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+            st.caption("💡 *Tips: Jika download gagal/error IDM, **tahan tombol ALT** di keyboard saat mengklik Download.*")
 
 # ==============================================================================
 # TAB 2: PISAH PDF (SPLIT)
@@ -75,7 +78,7 @@ with tab2:
         split_mode = st.radio("Mode Pisah", ["Pisah Semua Halaman", "Pisah Berdasarkan Range"], horizontal=True)
 
         if split_mode == "Pisah Semua Halaman":
-            if st.button("✂️ Pisah & Simpan ZIP", type="primary", use_container_width=True):
+            if st.button("✂️ Pisah & Download ZIP", type="primary", use_container_width=True):
                 with st.spinner("Sedang memisah halaman..."):
                     zip_buffer = io.BytesIO()
                     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -86,13 +89,17 @@ with tab2:
                             writer.write(pdf_buffer)
                             zip_file.writestr(f"halaman_{i+1:03d}.pdf", pdf_buffer.getvalue())
                     
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    file_path = os.path.join(OUTPUT_DIR, f"Hasil_Pisah_Halaman_{timestamp}.zip")
-                    
-                    with open(file_path, "wb") as f:
-                        f.write(zip_buffer.getvalue())
+                    zip_buffer.seek(0)
                         
-                st.success(f"✅ PDF berhasil dipisah dan disimpan di: `{file_path}`")
+                st.success("✅ PDF berhasil dipisah!")
+                st.download_button(
+                    label="⬇️ Download Semua Halaman (ZIP)",
+                    data=zip_buffer,
+                    file_name="Hasil_Pisah_Halaman.zip",
+                    mime="application/zip",
+                    use_container_width=True
+                )
+                st.caption("💡 *Tips: Tahan tombol ALT saat klik Download jika menggunakan IDM.*")
 
         else:
             col_start, col_end = st.columns(2)
@@ -111,14 +118,16 @@ with tab2:
                             writer.add_page(reader.pages[i])
                         buffer = io.BytesIO()
                         writer.write(buffer)
-                        
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        file_path = os.path.join(OUTPUT_DIR, f"Rapor_Halaman_{start_page}_sampai_{end_page}_{timestamp}.pdf")
-                        
-                        with open(file_path, "wb") as f:
-                            f.write(buffer.getvalue())
+                        buffer.seek(0)
                             
-                    st.success(f"✅ Range halaman berhasil dipisah dan disimpan di: `{file_path}`")
+                    st.success("✅ Range halaman berhasil dipisah!")
+                    st.download_button(
+                        label=f"⬇️ Download Halaman {start_page} - {end_page}",
+                        data=buffer,
+                        file_name=f"Rapor_Halaman_{start_page}_sampai_{end_page}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
 # ==============================================================================
 # TAB 3: TAMBAH LOGO, TTD & STEMPEL (OVERLAY)
@@ -126,7 +135,6 @@ with tab2:
 with tab3:
     st.subheader("Tambahkan Logo, Tanda Tangan & Stempel ke PDF Rapor")
     
-    # Fungsi helper untuk cek file default
     def get_default_image(filename):
         path = os.path.join(DEFAULT_IMAGES_DIR, filename)
         return path if os.path.exists(path) else None
@@ -152,8 +160,6 @@ with tab3:
             st.warning("⚠️ Tidak ada PDF default. Silakan upload 1 PDF untuk preview.")
             
         pdf_sample = st.file_uploader("Upload PDF kustom (kosongkan jika pakai default)", type="pdf", key="overlay_sample")
-        
-        # Tentukan sumber PDF yang aktif
         active_pdf_source = pdf_sample if pdf_sample else default_pdf_path
         
         st.markdown("### 🖼️ 2. Upload Gambar (Opsional)")
@@ -167,40 +173,27 @@ with tab3:
         
         st.markdown("### 📁 Status File Default")
         col_chk1, col_chk2, col_chk3, col_chk4 = st.columns(4)
-        
-        # PERBAIKAN: Menggunakan blok if/else standar untuk menghindari bug Streamlit
         with col_chk1:
-            if default_pdf_path:
-                st.success("✅ PDF")
-            else:
-                st.error("❌ PDF")
-                
+            if default_pdf_path: st.success("✅ PDF")
+            else: st.error("❌ PDF")
         with col_chk2:
-            if default_logo:
-                st.success("✅ Logo")
-            else:
-                st.error("❌ Logo")
-                
+            if default_logo: st.success("✅ Logo")
+            else: st.error(" Logo")
         with col_chk3:
-            if default_ttd:
-                st.success("✅ TTD")
-            else:
-                st.error("❌ TTD")
-                
+            if default_ttd: st.success("✅ TTD")
+            else: st.error("❌ TTD")
         with col_chk4:
-            if default_stempel:
-                st.success("✅ Stempel")
-            else:
-                st.error("❌ Stempel")
+            if default_stempel: st.success("✅ Stempel")
+            else: st.error("❌ Stempel")
 
     with col_right:
-        st.markdown("### 📐 3. Atur Posisi (dalam mm)")
+        st.markdown("###  3. Atur Posisi (dalam mm)")
         MM_TO_PT = 2.83 
         
         col_p1, col_p2, col_p3 = st.columns(3)
         
         with col_p1:
-            st.markdown("** Logo Sekolah**")
+            st.markdown("**🎨 Logo Sekolah**")
             logo_x = st.number_input("X", value=93.0, step=0.1, key="pos_logo_x")
             logo_y = st.number_input("Y", value=4.5, step=0.1, key="pos_logo_y")
             logo_w = st.number_input("Lebar", value=23.5, step=0.1, key="pos_logo_w")
@@ -222,7 +215,7 @@ with tab3:
             s_y = st.number_input("Y", value=235.0, step=0.1, key="pos_s_y")
             
         with col_p3:
-            st.markdown("**🔴 Stempel Sekolah**")
+            st.markdown("** Stempel Sekolah**")
             stempel_w = st.number_input("Lebar", value=35.0, step=0.1, key="pos_stempel_w")
             stempel_x = st.number_input("X", value=73.7, step=0.1, key="pos_stempel_x")
             stempel_y = st.number_input("Y", value=233.0, step=0.1, key="pos_stempel_y")
@@ -233,7 +226,6 @@ with tab3:
     # Preview Logic
     if active_pdf_source:
         if st.button("👁️ Tampilkan Preview Posisi", type="secondary", use_container_width=True):
-            # Buka PDF dengan aman
             if isinstance(active_pdf_source, str):
                 pdf_doc = fitz.open(active_pdf_source)
             else:
@@ -277,11 +269,11 @@ with tab3:
             st.image(pix.tobytes("png"), caption="Preview Hasil", use_container_width=True)
             pdf_doc.close()
     else:
-        st.info("ℹ️ Silakan upload PDF atau tambahkan `default_rapor.pdf` di folder `default_files` untuk melihat preview.")
+        st.info("ℹ️ Silakan upload PDF atau tambahkan `default_rapor.pdf` di folder `default_files`.")
 
     st.divider()
-    st.markdown("###  4. Proses Massal (Wajib Upload)")
-    st.caption("Untuk memproses banyak rapor sekaligus, Anda tetap harus mengupload file-file PDF di sini.")
+    st.markdown("###  4. Proses Massal")
+    st.caption("Upload semua PDF rapor, lalu tempelkan logo, TTD & stempel sesuai posisi di atas.")
     
     pdf_files_batch = st.file_uploader("Upload SEMUA file PDF rapor siswa", type="pdf", accept_multiple_files=True, key="overlay_batch")
     
@@ -328,7 +320,6 @@ with tab3:
                             status_text.text(f"Memproses: {pdf_file.name}")
                             pdf_doc = fitz.open(stream=pdf_file.getvalue(), filetype="pdf")
                             
-                            # Iterasi halaman menggunakan range(len()) agar aman dari error
                             for page_num in range(len(pdf_doc)):
                                 page = pdf_doc[page_num]
                                 
@@ -362,13 +353,19 @@ with tab3:
                         
                         progress_bar.progress((idx + 1) / len(pdf_files_batch))
                 
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                file_path = os.path.join(OUTPUT_DIR, f"Rapor_Lengkap_Logo_TTD_Stempel_{timestamp}.zip")
+                zip_buffer.seek(0)
                 
-                with open(file_path, "wb") as f:
-                    f.write(zip_buffer.getvalue())
-                    
-                st.success(f"🎉 {len(pdf_files_batch)} file PDF berhasil diproses dan disimpan di: `{file_path}`")
+            st.success(f"🎉 {len(pdf_files_batch)} file PDF berhasil diproses!")
+            
+            # KEMBALI KE DOWNLOAD BUTTON AGAR BISA DIAKSES DI WEB
+            st.download_button(
+                label="⬇️ Download Semua PDF (ZIP)",
+                data=zip_buffer,
+                file_name="Rapor_Lengkap_Logo_TTD_Stempel.zip",
+                mime="application/zip",
+                use_container_width=True
+            )
+            st.caption("💡 *Tips: Tahan tombol ALT saat klik Download jika menggunakan IDM.*")
 
 # ===== FOOTER =====
 st.divider()
